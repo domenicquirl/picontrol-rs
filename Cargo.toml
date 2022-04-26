@@ -1,11 +1,11 @@
 [package]
 name        = "picontrol"
 license     = "MIT"
-version     = "0.2.1"
-authors     = ["Enrico Mezzato"]
+version     = "0.3.0"
+authors     = ["Domenic Quirl", "Enrico Mezzato"]
 description = "A library to access the RevolutionPi industrial PLC. A console application similar to the piTest command line tool is provided as an example."
-edition     = "2018"
-repository  = "https://github.com/mezzato/picontrol-rs"
+edition     = "2021"
+repository  = "https://github.com/domenicquirl/picontrol-rs"
 # build = "build.rs"
 
 # [build-dependencies]
