@@ -30,7 +30,7 @@ use std::os::unix::io::AsRawFd;
 #[allow(dead_code)]
 mod ioctl;
 mod picontrol;
-pub use picontrol::*;
+pub use crate::picontrol::*;
 
 #[derive(Debug)]
 pub enum CstrToStrError {
@@ -102,23 +102,23 @@ pub fn num_to_bytes(
     size: usize,
 ) -> std::result::Result<Vec<u8>, Box<dyn std::error::Error>> {
     match size {
-        8 => return Ok(vec![num as u8]),
+        8 => Ok(vec![num as u8]),
         16 => {
             let mut buf = [0; 2];
             LittleEndian::write_u16(&mut buf, num as u16);
-            return Ok(buf.to_vec());
+            Ok(buf.to_vec())
         }
         32 => {
             let mut buf = [0; 4];
             LittleEndian::write_u32(&mut buf, num as u32);
-            return Ok(buf.to_vec());
+            Ok(buf.to_vec())
         }
         64 => {
             let mut buf = [0; 8];
             LittleEndian::write_u64(&mut buf, num as u64);
-            return Ok(buf.to_vec());
+            Ok(buf.to_vec())
         }
-        _ => return Err(From::from(format!("invalid size {}", size))),
+        _ => Err(From::from(format!("invalid size {}", size))),
     }
 }
 
@@ -138,7 +138,7 @@ impl RevPiControl {
 
     /// Open the Pi Control interface.
     pub fn open(&mut self) -> io::Result<bool> {
-        if let Some(_) = self.handle.as_mut() {
+        if self.handle.as_mut().is_some() {
             return Ok(true);
         }
         let file = OpenOptions::new()
@@ -160,26 +160,23 @@ impl RevPiControl {
 
     /// Close the Pi Control interface.
     pub fn close(&mut self) {
-        if let Some(f) = self.handle.as_mut() {
-            std::mem::drop(f);
-            self.handle = None;
-            return;
-        }
+        let f = self.handle.take();
+        std::mem::drop(f);
     }
 
     /// Reset Pi Control Interface.
     pub fn reset(&self) -> Result<c_int> {
         let f = self.handle.as_ref().ok_or(Sys(ENODEV))?;
-        return unsafe { ioctl::reset(f.as_raw_fd()) };
+        unsafe { ioctl::reset(f.as_raw_fd()) }
     }
 
     // Gets process data from a specific position, reads @length bytes from file.
     // Returns a result containing the bytes read or error.
-    pub fn read(&mut self, offset: u64, length: usize) -> std::io::Result<(Vec<u8>)> {
+    pub fn read(&mut self, offset: u64, length: usize) -> std::io::Result<Vec<u8>> {
         let f = self
             .handle
             .as_mut()
-            .ok_or(io::Error::new(ErrorKind::NotFound, "error reading file"))?;
+            .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "error reading file"))?;
         /* seek */
         f.seek(SeekFrom::Start(offset))?;
         let mut v = vec![0u8; length];
@@ -188,14 +185,14 @@ impl RevPiControl {
     }
 
     /// Writes process data at a specific position and a returns a boolean result.
-    pub fn write(&mut self, offset: u64, data: &Vec<u8>) -> std::io::Result<(bool)> {
+    pub fn write(&mut self, offset: u64, data: &[u8]) -> std::io::Result<bool> {
         let f = self
             .handle
             .as_mut()
-            .ok_or(io::Error::new(ErrorKind::NotFound, "error reading file"))?;
+            .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "error reading file"))?;
         /* seek */
         f.seek(SeekFrom::Start(offset))?;
-        f.write(data)?;
+        f.write_all(data)?;
         Ok(true)
     }
 
@@ -229,12 +226,12 @@ impl RevPiControl {
 
     /// Gets the value of one bit in the process image.
     pub fn get_bit_value(&self, pSpiValue: &mut picontrol::SPIValue) -> Result<bool> {
-        return self.handle_bit_value(pSpiValue, ioctl::get_bit_value);
+        self.handle_bit_value(pSpiValue, ioctl::get_bit_value)
     }
 
     /// Sets the value of one bit in the process image.
     pub fn set_bit_value(&self, pSpiValue: &mut picontrol::SPIValue) -> Result<bool> {
-        return self.handle_bit_value(pSpiValue, ioctl::set_bit_value);
+        self.handle_bit_value(pSpiValue, ioctl::set_bit_value)
     }
 
     fn handle_bit_value(
@@ -263,11 +260,11 @@ impl RevPiControl {
     ///
     /// * `fp` - The file path
     ///
-    pub fn dump(&mut self, fp: &str) -> std::io::Result<(bool)> {
+    pub fn dump(&mut self, fp: &str) -> std::io::Result<bool> {
         let f = self
             .handle
             .as_mut()
-            .ok_or(io::Error::new(ErrorKind::NotFound, "error reading file"))?;
+            .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "error reading file"))?;
         /* seek */
         f.seek(SeekFrom::Start(0))?;
 
@@ -306,6 +303,12 @@ impl RevPiControl {
     }
 }
 
+impl Default for RevPiControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Drop for RevPiControl {
     fn drop(&mut self) {
         self.close();
@@ -315,7 +318,7 @@ impl Drop for RevPiControl {
 // get_module_name returns a friendly name for a RevPi module type.
 pub fn get_module_name(moduletype: u32) -> &'static str {
     let moduletype = moduletype & picontrol::PICONTROL_NOT_CONNECTED_MASK;
-    let moddes = match moduletype {
+    match moduletype {
         95 => "RevPi Core",
         96 => "RevPi DIO",
         97 => "RevPi DI",
@@ -336,14 +339,12 @@ pub fn get_module_name(moduletype: u32) -> &'static str {
         79 => "Gateway Profinet IRT",
         81 => "Gateway SercosIII",
         _ => "unknown moduletype",
-    };
-
-    moddes
+    }
 }
 
 // IsModuleConnected checks whether a RevPi module is conneted.
 pub fn is_module_connected(moduletype: u32) -> bool {
-    return moduletype & picontrol::PICONTROL_NOT_CONNECTED > 0;
+    moduletype & picontrol::PICONTROL_NOT_CONNECTED > 0
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 use clap::{App, Arg, SubCommand};
-use picontrol::{get_module_name, is_module_connected,SDeviceInfo,SPIValue};
+use picontrol::{get_module_name, is_module_connected, SDeviceInfo, SPIValue};
 
 use std::str::FromStr;
 
@@ -101,7 +101,6 @@ fn main() {
 
     // this implements the drop trait, cleans up memory after going out of scope
     let mut picontrol = picontrol::RevPiControl::new();
-    
 
     if matches.is_present("image-source") {
         let m = matches.value_of("image-source").unwrap();
@@ -148,7 +147,7 @@ fn main() {
             println!("Value for variable name: {}", varname);
             read_variable_value(&mut picontrol, varname, format, false).unwrap_or_else(|err| {
                 println!("error reading variable: {}", err);
-                return false;
+                false
             });
         } else {
             println!("no variable specified");
@@ -166,7 +165,7 @@ fn main() {
 
             write_variable_value(&mut picontrol, varname, value).unwrap_or_else(|err| {
                 println!("error writing variable: {}", err);
-                return false;
+                false
             });
         } else {
             println!("no variable specified");
@@ -178,7 +177,6 @@ fn main() {
             if let Err(err) = picontrol.dump(fp) {
                 println!("dump error: {}", err);
             }
-            return;
         } else {
             println!("no file path specified");
         }
@@ -347,12 +345,10 @@ fn show_device_list(as_dev_list: Vec<SDeviceInfo>) {
 
         if dev.i8uActive > 0 {
             println!("Module is present");
+        } else if is_module_connected(dev.i16uModuleType as u32) {
+            println!("Module is NOT present, data is NOT available!!!");
         } else {
-            if is_module_connected(dev.i16uModuleType as u32) {
-                println!("Module is NOT present, data is NOT available!!!");
-            } else {
-                println!("Module is present, but NOT CONFIGURED!!!");
-            }
+            println!("Module is present, but NOT CONFIGURED!!!");
         }
 
         // Show offset and length of input section in process image
