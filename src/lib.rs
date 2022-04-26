@@ -18,7 +18,6 @@ use std::str;
 use byteorder::{ByteOrder, LittleEndian};
 use nix::errno::Errno;
 use nix::errno::Errno::ENODEV;
-use nix::Error::Sys;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::ErrorKind;
@@ -166,7 +165,7 @@ impl RevPiControl {
 
     /// Reset Pi Control Interface.
     pub fn reset(&self) -> Result<c_int> {
-        let f = self.handle.as_ref().ok_or(Sys(ENODEV))?;
+        let f = self.handle.as_ref().ok_or(ENODEV)?;
         unsafe { ioctl::reset(f.as_raw_fd()) }
     }
 
@@ -198,28 +197,28 @@ impl RevPiControl {
 
     /// Get the info for a variable.
     pub fn get_variable_info(&self, name: &str) -> Result<picontrol::SPIVariable> {
-        let f = self.handle.as_ref().ok_or(Sys(ENODEV))?;
+        let f = self.handle.as_ref().ok_or(ENODEV)?;
         let mut v = picontrol::SPIVariable {
             strVarName: byte_to_int8_array(name),
             ..Default::default()
         };
         let res = unsafe { ioctl::get_variable_info(f.as_raw_fd(), &mut v) }?;
         if res < 0 {
-            return Err(Sys(Errno::last()));
+            return Err(Errno::last());
         }
         Ok(v)
     }
 
     /// Gets a description of connected devices.
     pub fn get_device_info_list(&self) -> Result<Vec<picontrol::SDeviceInfo>> {
-        let f = self.handle.as_ref().ok_or(Sys(ENODEV))?;
+        let f = self.handle.as_ref().ok_or(ENODEV)?;
         // let mut pDev: picontrol::SDeviceInfo = unsafe { mem::uninitialized() };
         let mut pDev = [picontrol::SDeviceInfo {
             ..Default::default()
         }; picontrol::REV_PI_DEV_CNT_MAX as usize];
         let res = unsafe { ioctl::get_device_info_list(f.as_raw_fd(), &mut pDev[0]) }?;
         if res < 0 {
-            return Err(Sys(Errno::last()));
+            return Err(Errno::last());
         }
         Ok(pDev[..res as usize].to_vec())
     }
@@ -239,14 +238,14 @@ impl RevPiControl {
         pSpiValue: &mut picontrol::SPIValue,
         func: unsafe fn(i32, *mut picontrol::SPIValueStr) -> std::result::Result<i32, nix::Error>,
     ) -> Result<bool> {
-        let f = self.handle.as_ref().ok_or(Sys(ENODEV))?;
+        let f = self.handle.as_ref().ok_or(ENODEV)?;
 
         pSpiValue.i16uAddress += (pSpiValue.i8uBit as u16) / 8;
         pSpiValue.i8uBit %= 8;
 
         let res = unsafe { func(f.as_raw_fd(), pSpiValue) }?;
         if res < 0 {
-            return Err(Sys(Errno::last()));
+            return Err(Errno::last());
         }
         Ok(true)
     }
