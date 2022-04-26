@@ -1,11 +1,8 @@
 use byteorder::{ByteOrder, LittleEndian};
-use clap::{App, Arg, SubCommand};
+use clap::{Arg, Command};
 use picontrol::{get_module_name, is_module_connected, SDeviceInfo, SPIValue};
 
 use std::str::FromStr;
-
-#[macro_use]
-extern crate clap;
 
 enum Formats {
     Decimal,
@@ -26,43 +23,43 @@ impl FromStr for Formats {
     }
 }
 
-fn main() {
-    let matches = App::new("pitestrs")
+fn create_clap_app() -> clap::Command<'static> {
+    Command::new("pitestrs")
         .version("1.0")
         .about("pitest command line written in Rust")
         .arg(
-            Arg::with_name("device-list")
-                .short("l")
+            Arg::new("device-list")
+                .short('l')
                 .help("Shows the device list"),
         )
         .arg(
-            Arg::with_name("reset")
-                .short("x")
+            Arg::new("reset")
+                .short('x')
                 .long("reset")
                 .help("Resets the piControl driver"),
         )
         .arg(
-            Arg::with_name("firmware-update")
-                .short("f")
+            Arg::new("firmware-update")
+                .short('f')
                 .help("Updates the firmware of a module"),
         )
         .arg(
-            Arg::with_name("image-source")
-                .short("s")
+            Arg::new("image-source")
+                .short('s')
                 .help("The process image dumped file path, if empty the default is used"),
         )
         .subcommand(
-            SubCommand::with_name("read")
+            Command::new("read")
                 .about("Reads a variable")
                 .arg(
-                    Arg::with_name("variable-name")
-                        .short("n")
+                    Arg::new("variable-name")
+                        .short('n')
                         .help("the variable name")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("variable-format")
-                        .short("f")
+                    Arg::new("variable-format")
+                        .short('f')
                         .default_value("d")
                         // Define the list of possible values
                         .possible_values(&["d", "h", "b"])
@@ -71,33 +68,36 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("write")
+            Command::new("write")
                 .about("Writes a variable")
                 .arg(
-                    Arg::with_name("variable-name")
-                        .short("n")
+                    Arg::new("variable-name")
+                        .short('n')
                         .help("the variable name")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("variable-value")
-                        .short("v")
+                    Arg::new("variable-value")
+                        .short('v')
                         .help("the variable value")
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("dump")
+            Command::new("dump")
                 .about("Writes the process image to a file")
                 .arg(
-                    Arg::with_name("file-path")
-                        .short("f")
+                    Arg::new("file-path")
+                        .short('f')
                         .help("the file path")
                         .default_value("revpi_proc_img.bin")
                         .takes_value(true),
                 ),
         )
-        .get_matches();
+}
+
+fn main() {
+    let matches = create_clap_app().get_matches();
 
     // this implements the drop trait, cleans up memory after going out of scope
     let mut picontrol = picontrol::RevPiControl::new();
@@ -139,7 +139,7 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("read") {
         // "$ myapp test" was run
         if let Some(varname) = matches.value_of("variable-name") {
-            let format = value_t!(matches, "variable-format", Formats).unwrap_or_else(|err| {
+            let format = matches.value_of_t("variable-format").unwrap_or_else(|err| {
                 println!("invalid read format: {}", err);
                 err.exit();
             });
@@ -158,7 +158,7 @@ fn main() {
         if let Some(varname) = matches.value_of("variable-name") {
             println!("Value for variable name: {}", varname);
 
-            let value = value_t!(matches, "variable-value", u32).unwrap_or_else(|err| {
+            let value = matches.value_of_t("variable-value").unwrap_or_else(|err| {
                 println!("invalid write value: {}", err);
                 err.exit();
             });
@@ -363,5 +363,13 @@ fn show_device_list(as_dev_list: Vec<SDeviceInfo>) {
             dev.i16uOutputOffset, dev.i16uOutputLength
         );
         println!("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn create_clap_app() {
+        super::create_clap_app().debug_assert();
     }
 }

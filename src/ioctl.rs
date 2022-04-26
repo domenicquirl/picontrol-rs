@@ -1,3 +1,5 @@
+use nix::{ioctl_none_bad, ioctl_read_bad, request_code_none};
+
 use crate::picontrol;
 
 pub const KB_RESET: u32 = request_code_none!(picontrol::KB_IOC_MAGIC, 12) as u32; //_IO(picontrol::KB_IOC_MAGIC, 12); // reset the piControl driver including the config file
