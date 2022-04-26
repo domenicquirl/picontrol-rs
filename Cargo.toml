@@ -15,7 +15,7 @@ repository  = "https://github.com/domenicquirl/picontrol-rs"
 # debug = true
 
 [dependencies]
-nix       = "0.24"
+nix       = "0.23"
 clap      = "3"
 byteorder = "1"
 
