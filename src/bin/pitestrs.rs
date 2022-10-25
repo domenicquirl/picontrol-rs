@@ -1,9 +1,10 @@
 use byteorder::{ByteOrder, LittleEndian};
-use clap::{Arg, Command};
+use clap::{value_parser, Arg, ArgAction, Command};
 use picontrol::{get_module_name, is_module_connected, SDeviceInfo, SPIValue};
 
 use std::str::FromStr;
 
+#[derive(Debug, Clone, Copy)]
 enum Formats {
     Decimal,
     Hex,
@@ -23,24 +24,27 @@ impl FromStr for Formats {
     }
 }
 
-fn create_clap_app() -> clap::Command<'static> {
+fn create_clap_app() -> clap::Command {
     Command::new("pitestrs")
         .version("1.0")
         .about("pitest command line written in Rust")
         .arg(
             Arg::new("device-list")
                 .short('l')
+                .action(ArgAction::SetTrue)
                 .help("Shows the device list"),
         )
         .arg(
             Arg::new("reset")
                 .short('x')
                 .long("reset")
+                .action(ArgAction::SetTrue)
                 .help("Resets the piControl driver"),
         )
         .arg(
             Arg::new("firmware-update")
                 .short('f')
+                .action(ArgAction::SetTrue)
                 .help("Updates the firmware of a module"),
         )
         .arg(
@@ -54,17 +58,15 @@ fn create_clap_app() -> clap::Command<'static> {
                 .arg(
                     Arg::new("variable-name")
                         .short('n')
-                        .help("the variable name")
-                        .takes_value(true),
+                        .help("the variable name"),
                 )
                 .arg(
                     Arg::new("variable-format")
                         .short('f')
                         .default_value("d")
-                        // Define the list of possible values
-                        .possible_values(&["d", "h", "b"])
-                        .help("the variable format")
-                        .takes_value(true),
+                        .value_parser(value_parser!(Formats))
+                        .required(true)
+                        .help("the variable format"),
                 ),
         )
         .subcommand(
@@ -73,14 +75,14 @@ fn create_clap_app() -> clap::Command<'static> {
                 .arg(
                     Arg::new("variable-name")
                         .short('n')
-                        .help("the variable name")
-                        .takes_value(true),
+                        .help("the variable name"),
                 )
                 .arg(
                     Arg::new("variable-value")
                         .short('v')
-                        .help("the variable value")
-                        .takes_value(true),
+                        .required(true)
+                        .value_parser(value_parser!(u32))
+                        .help("the variable value"),
                 ),
         )
         .subcommand(
@@ -90,8 +92,7 @@ fn create_clap_app() -> clap::Command<'static> {
                     Arg::new("file-path")
                         .short('f')
                         .help("the file path")
-                        .default_value("revpi_proc_img.bin")
-                        .takes_value(true),
+                        .default_value("revpi_proc_img.bin"),
                 ),
         )
 }
@@ -102,8 +103,8 @@ fn main() {
     // this implements the drop trait, cleans up memory after going out of scope
     let mut picontrol = picontrol::RevPiControl::new();
 
-    if matches.is_present("image-source") {
-        let m = matches.value_of("image-source").unwrap();
+    if matches.contains_id("image-source") {
+        let m = matches.get_one::<String>("image-source").unwrap();
         picontrol = picontrol::RevPiControl::new_at(m);
     }
 
@@ -112,14 +113,14 @@ fn main() {
         return;
     }
 
-    if matches.is_present("reset") {
+    if matches.get_flag("reset") {
         if let Err(err) = picontrol.reset() {
             println!("reset error: {}", err);
         }
         return;
     }
 
-    if matches.is_present("device-list") {
+    if matches.get_flag("device-list") {
         match picontrol.get_device_info_list() {
             Err(err) => {
                 println!("ls error: {}", err);
@@ -132,17 +133,16 @@ fn main() {
         }
     }
 
-    if matches.is_present("firmware-update") {
+    if matches.get_flag("firmware-update") {
         println!("Value for config");
     }
 
     if let Some(matches) = matches.subcommand_matches("read") {
         // "$ myapp test" was run
-        if let Some(varname) = matches.value_of("variable-name") {
-            let format = matches.value_of_t("variable-format").unwrap_or_else(|err| {
-                println!("invalid read format: {}", err);
-                err.exit();
-            });
+        if let Some(varname) = matches.get_one::<String>("variable-name") {
+            let format = *matches
+                .get_one::<Formats>("variable-format")
+                .expect("invalid read format");
 
             println!("Value for variable name: {}", varname);
             read_variable_value(&mut picontrol, varname, format, false).unwrap_or_else(|err| {
@@ -155,13 +155,12 @@ fn main() {
     }
 
     if let Some(matches) = matches.subcommand_matches("write") {
-        if let Some(varname) = matches.value_of("variable-name") {
+        if let Some(varname) = matches.get_one::<String>("variable-name") {
             println!("Value for variable name: {}", varname);
 
-            let value = matches.value_of_t("variable-value").unwrap_or_else(|err| {
-                println!("invalid write value: {}", err);
-                err.exit();
-            });
+            let value = *matches
+                .get_one::<u32>("variable-value")
+                .expect("invalid write value");
 
             write_variable_value(&mut picontrol, varname, value).unwrap_or_else(|err| {
                 println!("error writing variable: {}", err);
@@ -173,7 +172,7 @@ fn main() {
     }
 
     if let Some(matches) = matches.subcommand_matches("dump") {
-        if let Some(fp) = matches.value_of("file-path") {
+        if let Some(fp) = matches.get_one::<String>("file-path") {
             if let Err(err) = picontrol.dump(fp) {
                 println!("dump error: {}", err);
             }
